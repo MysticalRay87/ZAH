@@ -1,4 +1,4 @@
-# Zero-G Admin Helper (v5.1.0-Alpha)
+# Zero-G Admin Helper (v1.0-Alpha)
 
 An immersive, terminal-integrated desktop administration station designed for managing an Empyrion: Galactic Survival dedicated server. This application drops traditional corporate design conventions in favor of a high-tech, dark-themed sci-fi cockpit HUD utilizing PySide6/PyQt6 and asynchronous background streaming threads.
 
