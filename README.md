@@ -1,4 +1,4 @@
-# Zero-G Admin Helper (v5.1.0-Alpha)
+# Zero-G Admin Helper (v1.0-Alpha)
 
 An immersive, high-tech sci-fi standalone desktop administration station designed to monitor a dedicated Empyrion Galactic Survival game server environment and handle live, in-game administration operations.
 
