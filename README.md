@@ -88,4 +88,4 @@ The application initialization sequence uses sequential milestones to analyze lo
 * **Target Host:** Dedicated Empyrion Server hosted via GTX Gaming
 * **Active Destination IP:** `66.23.236.138`
 * **Active Routing Port:** `30004` (Dedicated text-based Telnet console log stream)
-* **Authentication Token:** `535ue`
+* **Authentication Token:** `*******`
