@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel
+from PyQt6.QtWidgets import QMainWindow, QWidget, QGridLayout, QFrame
 from PyQt6.QtCore import Qt
 
 class MainCockpit(QMainWindow):
@@ -16,7 +16,24 @@ class MainCockpit(QMainWindow):
         # --- Central UI Canvas ---
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-        self.layout = QVBoxLayout(self.central_widget)
+
+        # --- Grid Layout Definition ---
+        self.layout = QGridLayout(self.central_widget)
+        self.central_widget.setContentsMargins( 10, 10, 10, 10)
+        self.central_widget.setSpacing(10)
+
+        # Zone Definition (Conceptual placeholders)
+        # Zone A: Telemetry Panel (Top Left)
+        # Zone B: Command Console (Bottom Span)
+        self.setup_zones()
         
         # Initial log confirmation for registry sync
         print("[SUCCESS] Main Cockpit Dashboard initialized.")
+
+    def setup_zones(self):
+        # Create a frame for the console (Zone B)
+        self.console_frame = QFrame()
+        self.console_frame.setObjectName("ConsoleFrame")
+        self.grid.addWidget(self.console_frame, 2, 0, 1, 3) # Row 2, Col 0, 1 row height, 3 cols wide
+        
+        print("[SUCCESS] Main Cockpit grid initialized.")
