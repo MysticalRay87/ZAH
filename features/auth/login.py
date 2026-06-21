@@ -5,7 +5,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen
 
 # Imported features
-from features.auth.persistence import get_data_path
+from features.auth.persistence import USERS_FILE
+file_path = USERS_FILE
 
 class LoginWindow(QDialog):
     """Screen 1B: Standalone Pop-up Modal Login Window - Symmetrically Flipped Controls"""
@@ -14,6 +15,7 @@ class LoginWindow(QDialog):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.onboarding_requested = False # State flag to track onboarding request
         print("[DEBUG] Initializing standard, stable pop-up LoginWindow...")
         
         self.setFixedSize(512, 512)
@@ -74,6 +76,17 @@ class LoginWindow(QDialog):
         self.cancel_btn.setStyleSheet("QPushButton { background-color: transparent; border: none; } QPushButton:hover { background-color: rgba(255, 51, 51, 0.2); border: 1px solid #ff3333; } QPushButton:pressed { background-color: rgba(255, 51, 51, 0.03); }")
         self.cancel_btn.clicked.connect(self.process_cancel_dismissal)
 
+        # Onboarding trigger button
+        self.onboarding_btn = QPushButton("Set Up New Account", self)
+        self.onboarding_btn.setGeometry(132, 420, 250, 30) # Adjusted geometry
+        self.onboarding_btn.setStyleSheet("QPushButton { color: #00ffff; background: transparent; border: 1px solid #00ffff; }")
+        self.onboarding_btn.clicked.connect(self.initiate_onboarding)
+
+    def initiate_onboarding(self):
+        print("[STATUS] Onboarding trigger detected. Handoff to wizard phase...")
+        self.onboarding_requested = True
+        self.accept() # Close login screen
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -97,9 +110,9 @@ class LoginWindow(QDialog):
         # 1. Capture user inputs
         entered_id = self.username_input.text().strip()
         entered_key = self.password_input.text().strip()
-        
+    
         # 2. Locate registry file using the persistence utility
-        file_path = get_data_path()
+        file_path = USERS_FILE
         
         # 3. Handle missing registry
         if not os.path.exists(file_path):

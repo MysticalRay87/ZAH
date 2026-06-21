@@ -1,41 +1,102 @@
 import json
 import os
+from datetime import datetime, timedelta
+
+SESSION_FILE = "data/session.json"
+USERS_FILE = "data/users.json"
 
 def get_data_path():
-    # Construct the path to users.json consistently
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.abspath(os.path.join(current_dir, "..", "..", "data", "users.json"))
+    """Returns the base data directory path."""
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-def save_account_data(new_user_data):
-    file_path = get_data_path()
-    
-    # Read phase
-    accounts = []
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as f:
+def create_user_profile(username, password, account_type):
+    """Creates an enriched user profile object."""
+    now = datetime.now().strftime("%m/%d/%Y at %H:%M")
+    return {
+        "Username": username,
+        "Password": password, # Ensure this is hashed in a production environment
+        "Account Type": account_type,
+        "Account Creation": now,
+        "Last login": now,
+        "Status": "Active",
+        "persist_session": False # Default state
+    }
+
+def save_account_data(user_data):
+    """Saves user account data to users.json."""
+    os.makedirs("data", exist_ok=True)
+    users = []
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r') as f:
             try:
-                accounts = json.load(f)
-            except json.JSONDecodeError:
-                accounts = []
+                users = json.load(f)
+            except:
+                users = []
     
-    accounts.append(new_user_data)
-    
-    # Write phase: Atomic replacement
-    temp_path = file_path + ".tmp"
-    with open(temp_path, 'w') as f:
-        json.dump(accounts, f, indent=4)
-        f.flush()
-        os.fsync(f.fileno()) # Force the OS to write buffer to disk
-    
-    # Atomically rename to target file (guarantees file state is updated)
-    os.replace(temp_path, file_path)
-    # Force print the absolute path so we know exactly where to look
-    abs_path = os.path.abspath(file_path)
-    print(f"[VERIFY] Checking file content at absolute path: {abs_path}")
-    
-    # Read the file back immediately to prove it contains data
-    with open(abs_path, 'r') as f:
-        content = f.read()
-        print(f"[VERIFY] Actual file content: {content[:50]}...")
+    users.append(user_data)
+    with open(USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
 
-    print(f"[DEBUG] Verification: File size is {os.path.getsize(file_path)} bytes.")
+def is_session_valid(expiry_days=365):
+    """
+    Checks if a valid session token exists and hasn't expired.
+    Returns True if session is valid, False otherwise.
+    """
+    if not os.path.exists(SESSION_FILE):
+        return False
+        
+    try:
+        with open(SESSION_FILE, 'r') as f:
+            data = json.load(f)
+            
+        last_login = datetime.fromisoformat(data.get("timestamp", "2000-01-01T00:00:00"))
+        if datetime.now() - last_login < timedelta(days=expiry_days):
+            return True
+    except (json.JSONDecodeError, ValueError, Exception) as e:
+        print(f"[DEBUG] Session validation error: {e}")
+        
+    return False
+
+def check_for_persistent_user():
+    """Checks users.json for any user with persist_session == True."""
+    if not os.path.exists(USERS_FILE):
+        return False
+    try:
+        with open(USERS_FILE, 'r') as f:
+            users = json.load(f)
+        for user in users:
+            if user.get("persist_session") is True:
+                return True
+    except:
+        return False
+    return False
+
+def save_session(username):
+    """Saves a new session token to disk."""
+    os.makedirs("data", exist_ok=True)
+    data = {
+        "username": username,
+        "timestamp": datetime.now().isoformat()
+    }
+    with open(SESSION_FILE, 'w') as f:
+        json.dump(data, f)
+    print(f"[SUCCESS] Session saved for {username}")
+
+def save_persistence_state(username, persist):
+    file_path = get_data_path()
+    try:
+        with open(file_path, 'r') as f:
+            users = json.load(f)
+        
+        # Update the specific user's record
+        for user in users:
+            if user.get("username") == username:
+                user["persist_session"] = persist
+                break
+        
+        # Commit the updated list to the registry
+        with open(file_path, 'w') as f:
+            json.dump(users, f, indent=4)
+            
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"[ERROR] Persistence registry unreachable: {e}")

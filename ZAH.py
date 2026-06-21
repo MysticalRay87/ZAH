@@ -1,6 +1,9 @@
 import os
 import sys
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QDialog
+from PyQt6.QtCore import QEventLoop, QCoreApplication
+
+from features.network.connection import is_network_ready
 
 # -------------------------------------------------------------------
 # MULTI-TIER PACKAGE NAMESPACE RESOLUTION
@@ -14,13 +17,21 @@ except ImportError as e:
     print(f"[WARNING] Could not load Application Loader: {e}")
     ApplicationLoader = None
 
-# Load Screen 2 (The Onboarding Wizard)
+# Load Screen 2 'The Onboarding Wizard'
 try:
     from features.auth.onboarding import AccountOnboardingWizard
     print("[SUCCESS] Package Namespace: AccountOnboardingWizard Loaded")
 except ImportError as e:
     print(f"[WARNING] Could not load Onboarding Wizard: {e}")
     AccountOnboardingWizard = None
+
+# LOAD LOGIN WINDOW: Must be imported before use in main()
+try:
+    from features.auth.login import LoginWindow
+    print("[SUCCESS] Package Namespace: LoginWindow Loaded")
+except ImportError as e:
+    print(f"[ERROR] Could not load LoginWindow: {e}")
+    LoginWindow = None
 
 def main():
     print("[DEBUG] Initializing Master Operational Registry Engine (PyQt6 Mode)...")
@@ -48,46 +59,55 @@ def main():
     # SEQUENTIAL BOOT LIFECYCLE MANAGEMENT LOOP
     # -------------------------------------------------------------------
     
-    # PHASE 1: Deploy Screen 1 (The Non-Blocking Animated Loader)
+    # PHASE 1. Initial Environment Synchronization
+    # The ApplicationLoader now internalizes the LoginWindow gate at 30%.
     if ApplicationLoader is not None:
         print("[DEBUG] Instantiating Screen 1: Application Splash Loader Canvas...")
         loader = ApplicationLoader()
-        
-        # Public method call to kick off the internal QTimer countdown
         loader.start_boot_sequence()
+        # Block until finished. Loader handles login internally.
+        loader_result = loader.exec()
         
-        # Freeze main thread here; wait for loader to hit 100% and call accept()
-        loader_exit_code = loader.exec()
+        # NAVIGATION HUB: Inspect intent from the LoginWindow instance held by loader
+        # (Assuming loader stores a reference to the login window or state)
+        # For now, we route based on the result of the loader chain
+        if loader_result == QDialog.DialogCode.Accepted:
+            print("[SUCCESS] All initialization gates clear. Spinning up master core cockpit dashboard view...")
         
-        # If the user closed the loader window prematurely, abort the entire stack
-        if loader_exit_code == 0:
-            print("[STATUS] Loading phase interrupted by operator. Aborting execution loop.")
-            sys.exit(0)
-    else:
-        print("[ERROR] Critical Component Failure: ApplicationLoader is missing. Aborting.")
-        sys.exit(1)
-
-    # PHASE 2: Deploy Screen 2 (The Unified Account Creation Wizard)
-    if AccountOnboardingWizard is not None:
-        print("[DEBUG] Instantiating Screen 2: Account Onboarding Wizard Canvas...")
-        wizard = AccountOnboardingWizard()
-        
-        # Freeze main thread here; wait for form to validate and call accept()
-        wizard_exit_code = wizard.exec()
-        
-        # Evaluate how the user exited Screen 2
-        if wizard_exit_code == 1:
-            print("[SUCCESS] Onboarding profile verified. Handoff to core environment complete.")
+        # If the user requested onboarding during the loader phase:
+        elif hasattr(loader, 'onboarding_requested') and loader.onboarding_requested:
+            if AccountOnboardingWizard is not None:
+                print("[DEBUG] Instantiating Screen 2: Account Onboarding Wizard Canvas...")
+                wizard = AccountOnboardingWizard(parent=None)
+                QCoreApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+                wizard.exec()
+            else:
+                print("[ERROR] Wizard missing.")
+                sys.exit(1)
         else:
-            print("[STATUS] Wizard deployment canceled by operator. Cleaning up local variables.")
+            print("[STATUS] User exited or auth failed. Shutting down.")
             sys.exit(0)
+            
+        loader.deleteLater()
+    
+# PHASE 0: Network Check (The first gate)
+    from features.network.connection import is_network_ready, NetworkWizardOverlay
+    
+    if not is_network_ready():
+        print("[STATUS] Network unreachable. Launching Network Wizard...")
+        network_wizard = NetworkWizardOverlay()
+        if network_wizard.exec() != QDialog.DialogCode.Accepted:
+            sys.exit(0) # Exit if wizard canceled
     else:
-        print("[ERROR] Critical Component Failure: AccountOnboardingWizard is missing. Aborting.")
-        sys.exit(1)
+        print("[SUCCESS] Network verified.")
+    
+    # PHASE 3: Launch Primary System Administration Dashboard Frame
+    if loader.onboarding_requested and AccountOnboardingWizard:
+        wizard = AccountOnboardingWizard()
+        wizard.exec()
+    else:
+        print("[STATUS] All initialization gates clear. Spinning up master core cockpit dashboard view...")
 
-    # FUTURE PHASE 3: Launch Primary System Administration Dashboard Frame
-    print("[STATUS] All initialization gates clear. Spinning up master core cockpit dashboard view...")
-    # This is where your main workspace screen will show up later!
 
 if __name__ == "__main__":
     main()

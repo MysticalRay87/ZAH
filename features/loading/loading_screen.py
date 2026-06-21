@@ -1,20 +1,27 @@
 import os
+import json
 from PyQt6.QtWidgets import QDialog
-from PyQt6.QtCore import QTimer, Qt, QRectF, QCoreApplication
+from PyQt6.QtCore import QTimer, Qt, QRectF
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QFont, QPainterPath
 
 try:
     from features.auth.login import LoginWindow
+    from features.network.connection import NetworkWizardOverlay, is_network_ready
+    from features.auth.persistence import is_session_valid, check_for_persistent_user
 except ImportError:
     import sys
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from features.auth.login import LoginWindow
+    from features.network.connection import NetworkWizardOverlay, is_network_ready
+    from features.auth.persistence import is_session_valid, check_for_persistent_user
 
 class ApplicationLoader(QDialog):
     """Screen 1A: Zero-G Advanced Loader - Active Event Pumping Engine"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.login_bypassed = False # Track bypass state for session validation
+        self.onboarding_requested = False # State flag to track onboarding request
         print("[DEBUG] Initializing safe loader with active event loop pumping...")
 
         self.setFixedSize(1000, 750)
@@ -63,57 +70,57 @@ class ApplicationLoader(QDialog):
         self.boot_timer.start(30)
 
     def advance_loading_cycle(self):
-        # Always update line animation coordinates
+        self.current_progress += 1
+        
+        # 1. VISUAL ANIMATION LOGIC (Persisted)
         self.pulse_offset += 5.0
         if self.pulse_offset >= 200.0:
             self.pulse_offset = 0.0
 
-        # --- MILESTONE INTERCEPT 1: LOGIN POPUP WITH PUMPED ANIMATIONS ---
-        if self.current_progress == 30 and not self.account_checkpoint_cleared:
-            print("[CHECKPOINT] 30% Milestone Hit. Launching login challenge...")
-            
-            # Spin up the login dialog
-            login_popup = LoginWindow(self)
-            
-            # Make the login popup visible asynchronously so we don't starve the thread
-            login_popup.show()
-            
-            # Run a manual pumping loop right here while the popup window remains visible!
-            while login_popup.isVisible():
-                # 1. Update the line dash positions so they keep traveling
-                self.pulse_offset += 0.15 # Fine-tuned step size during dialogue pause
-                if self.pulse_offset >= 200.0:
-                    self.pulse_offset = 0.0
-                    
-                # 2. Force the loader window to redraw its neon canvas lines
-                self.update()
-                
-                # 3. Pump the system event queues to keep inputs and visuals completely awake
-                QCoreApplication.processEvents()
-                
-            # Evaluate the return code once the loop terminates (via Accept or Cancel/X)
-            if login_popup.result() == QDialog.DialogCode.Accepted:
-                print("[SUCCESS] Credentials cleared. Unlocking timeline updates...")
-                self.account_checkpoint_cleared = True
+        # 2. STATE-GATED PROGRESSION
+        # --- LOGIN GATE (30%) ---
+        if self.current_progress == 30:
+            if is_session_valid() or check_for_persistent_user():
+                print("[SUCCESS] Session/Persistent user found. Bypassing login.")
+                self.login_bypassed = True
+                self.current_progress = 59 # Jump to edge of network gate
             else:
-                print("[TERMINATION] Login process dismissed or aborted. Shutting down...")
-                self.boot_timer.stop()
-                self.reject()
-                return
+                print("[INFO] No valid session. Triggering Login.")
+                self.boot_timer.stop() # Lock timer during user interaction
+                self.login_window = LoginWindow()
+                self.login_window.setWindowModality(Qt.WindowModality.ApplicationModal)
+                self.login_window.finished.connect(self.resume_boot_sequence)
+                self.login_window.show()
+                return # Exit loop until window is closed
+            
+        # --- NETWORK GATE (60%) ---
+        elif self.current_progress == 60 and not self.network_checkpoint_cleared:
+            if is_network_ready():
+                print("[SUCCESS] Network verified.")
+                self.network_checkpoint_cleared = True
+            else:
+                print("[CHECKPOINT] 60% Milestone Hit. Running network diagnostics...")
+                self.boot_timer.stop() # Lock timer during user interaction
+                network_wizard = NetworkWizardOverlay(self)
+                network_wizard.finished.connect(self.resume_boot_sequence)
+                network_wizard.show()
+                return # Exit loop until window is closed
+            pass
 
-        # --- MILESTONE INTERCEPT 2: 60% NETWORK CONFIGURATION GATE ---
-        if self.current_progress == 60 and not self.network_checkpoint_cleared:
-            print("[CHECKPOINT] 60% Milestone Hit. Processing network configuration rules...")
-            self.network_checkpoint_cleared = True
-
-        # Increment layout progress bars
-        self.current_progress += 1
+        # 3. TRIGGER REPAINT
         self.update()
 
+        # 4. FINALIZATION
         if self.current_progress >= 100:
+            print("[STATUS] Milestone 100% Reached. Committing Handoff.")
             self.boot_timer.stop()
-            print("[SUCCESS] Pipeline clear. Launching workspace dashboard...")
-            self.accept()
+            self.accept() 
+            return
+
+    def resume_boot_sequence(self):
+        """Callback to resume the timer after a modal is dismissed."""
+        print("[STATUS] Gate cleared. Resuming boot sequence...")
+        self.boot_timer.start(30)
 
     def paintEvent(self, event):
         painter = QPainter(self)

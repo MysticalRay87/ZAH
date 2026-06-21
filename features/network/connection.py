@@ -1,11 +1,56 @@
+import json
 import os
-from PySide6.QtWidgets import QWidget, QLabel, QLineEdit, QPushButton
-from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt
+import socket
 
-class NetworkWizardOverlay(QWidget):
-    def __init__(self):
-        super().__init__()
+from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton
+from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import Qt
+
+# ---------------------------------------------------
+# Network Configuration Validation Function (Ping Check + Config File Integrity)
+# ---------------------------------------------------
+
+def is_network_ready(config_path="data/server_config.json", timeout=5.0):
+    """
+    Performs a diagnostic ping to verify connectivity.
+    Returns True if the server responds, False otherwise.
+    """
+    if not os.path.exists(config_path):
+        return False
+        
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            
+        # Ensure keys match the ones written in accept_action_callback
+        raw_ip = config.get("input_ip")
+        raw_port = config.get("input_port")
+        
+        if not raw_ip or not raw_port:
+            print("[DEBUG] Config exists but fields are empty or missing.")
+            return False
+            
+        ip = str(raw_ip)
+        port = int(raw_port)
+        
+        print(f"[DEBUG] Initiating network diagnostic: Ping to {ip}:{port} (Timeout: {timeout}s)...")
+        
+        # Diagnostic Ping Hook
+        with socket.create_connection((ip, port), timeout=timeout) as s:
+            print(f"[SUCCESS] Ping diagnostic passed for {ip}")
+            return True
+            
+    except (json.JSONDecodeError, ValueError, socket.timeout, ConnectionRefusedError, OSError) as e:
+        print(f"[WARNING] Ping diagnostic failed: {e}")
+        return False
+    
+# ---------------------------------------------------
+# Network Configuration Existence Check (Post-Ping)
+# ---------------------------------------------------
+
+class NetworkWizardOverlay(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
         
         # Enforce strict 512x512 square viewport bounds
         self.win_size = 512
@@ -91,7 +136,7 @@ class NetworkWizardOverlay(QWidget):
         self.btn_reset.setStyleSheet(btn_qss)
         self.btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_reset.clicked.connect(self.reset_action_callback)   
-       
+    
     def secure_password_typing_callback(self, text_value):
         """Dynamic slot that applies password dots only when text characters are present."""
         if text_value:
@@ -102,17 +147,14 @@ class NetworkWizardOverlay(QWidget):
     def reset_action_callback(self):
         print("[UI EVENT] Clear input fields executed. Restoring placeholder strings.")
 
-        # Clear text strings completely out of system memory
         self.input_ip.clear()
         self.input_port.clear()
 
-        # Safe password reset sequence: Isolate listener signals during visibility flip
         self.input_pass.blockSignals(True)
         self.input_pass.clear()
         self.input_pass.setEchoMode(QLineEdit.EchoMode.Normal)
         self.input_pass.blockSignals(False)
 
-        # Force individual widget components to flush visual buffers immediately
         self.input_ip.update()
         self.input_port.update()
         self.input_pass.update()
@@ -123,9 +165,26 @@ class NetworkWizardOverlay(QWidget):
         self.close()
 
     def accept_action_callback(self):
-        print("\n==================================================")
-        print("PRODUCTION WIZARD DATA INGESTION (512x512)")
-        print("==================================================")
+        print("\n==========================================")
+        print("PRODUCTION WIZARD DATA INGESTION SUMMARY:")
+        print("==========================================")
         print(f"IP Target     : {self.input_ip.text() if self.input_ip.text() else 'BLANK'}")
         print(f"Port Target   : {self.input_port.text() if self.input_port.text() else 'BLANK'}")
+        print(f"Auth Token    : {self.input_pass.text() if self.input_pass.text() else 'BLANK'}")
         print("==================================================")
+
+        # 1. Capture Data - Keys MUST match is_network_ready() dictionary lookup
+        config_data = {
+            "input_ip": self.input_ip.text().strip(),
+            "input_port": self.input_port.text().strip(),
+            "input_pass": self.input_pass.text().strip()
+        }
+        
+        # 2. Persistence
+        os.makedirs("data", exist_ok=True)
+        with open("data/server_config.json", "w") as f:
+            json.dump(config_data, f)
+            
+        # 3. Handoff
+        print("[SUCCESS] Network configuration saved.")
+        self.accept()
