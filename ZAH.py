@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QApplication, QDialog
 from PyQt6.QtCore import QEventLoop, QCoreApplication
 
 from features.network.connection import is_network_ready
+from features.dashboard.main_cockpit import MainCockpit
 
 # -------------------------------------------------------------------
 # MULTI-TIER PACKAGE NAMESPACE RESOLUTION
@@ -107,7 +108,15 @@ def main():
         wizard.exec()
     else:
         print("[STATUS] All initialization gates clear. Spinning up master core cockpit dashboard view...")
-
+        if loader.result() == QDialog.DialogCode.Accepted:
+            print("[SUCCESS] Loading sequence complete. Launching Main Cockpit.")
+            
+            # Instantiate and show the main dashboard
+            main_cockpit = MainCockpit()
+            main_cockpit.show()
+            
+            # Keep the application alive
+            sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
