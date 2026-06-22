@@ -24,10 +24,28 @@ class MainCockpit(QMainWindow):
         self.grid.setContentsMargins( 10, 10, 10, 10)
         self.grid.setSpacing(10)
 
-        # Zone Definition (Conceptual placeholders)
+        # --------------------------------------------------
+        # Zone Definition
+        # --------------------------------------------------
+
         # Zone A: Telemetry Panel (Top Left)
-        # Zone B: Command Console (Bottom Span)
-        self.setup_zones()
+        self.telemetry_panel = TelemetryPanel("SYSTEM LOAD")
+        self.telemetry_panel.setObjectName("TelemetryPanel")
+        self.grid.addWidget(self.telemetry_panel, 0, 0, 1, 1)
+
+        # Zone B: Console Output (Full Bottom Span)
+        self.console_frame = QFrame()
+        self.console_frame.setObjectName("ConsoleFrame")
+        self.console_layout = QVBoxLayout(self.console_frame)
+        
+        # Console output widget
+        self.console = QTextEdit()
+        self.console.setObjectName("ConsoleDisplay")
+        self.console.setReadOnly(True)
+        self.console_layout.addWidget(self.console)
+        
+        # Span across 3 columns at Row 2
+        self.grid.addWidget(self.console_frame, 2, 0, 1, 3)
         
         # --- Telemetry Engine Initialization ---
         self.telemetry_worker = TelemetryWorker("127.0.0.1", 30004)

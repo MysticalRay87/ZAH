@@ -92,7 +92,8 @@ class ApplicationLoader(QDialog):
             if is_session_valid() or check_for_persistent_user():
                 print("[SUCCESS] Session/Persistence user found. Bypassing login.")
                 self.login_bypassed = True
-                self.current_progress = 59 # Jump to edge of network gate
+                self.current_progress = 60 # Jump to edge of network gate
+                self.boot_timer.start()
             else:
                 print("[INFO] No valid session. Triggering Login.")
                 self.boot_timer.stop()
@@ -115,11 +116,19 @@ class ApplicationLoader(QDialog):
                 self.network_checkpoint_cleared = True
             else:
                 print("[CHECKPOINT] 60% Milestone Hit. Running network diagnostics...")
-                self.boot_timer.stop() # Lock timer during user interaction
+                self.boot_timer.stop() # 1. Stop timer
+                self.is_boot_paused = True # 2. Set pause flag to prevent further increments
+                
+                # 3. Use exec() for modal blocking
                 network_wizard = NetworkWizardOverlay(self)
-                network_wizard.finished.connect(self.resume_boot_sequence)
-                network_wizard.show()
-                return # Exit loop until window is closed
+                if network_wizard.exec(): # This blocks and returns True if accepted
+                    print(f"[SUCCESS] Network Configuration saved.")
+                    self.network_checkpoint_cleared = True
+                
+                # 4. Resume
+                self.is_boot_paused = False
+                self.boot_timer.start() # 3. Restart timer
+                return 
             pass
 
         # 3. TRIGGER REPAINT
