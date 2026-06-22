@@ -2,6 +2,7 @@ import os
 from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QComboBox, QPushButton
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QPixmap
+from datetime import datetime
 import re
 
 from features.auth.persistence import save_account_data
@@ -198,14 +199,25 @@ class AccountOnboardingWizard(QDialog):
 
         # ---- ACCOUNT INPUT CAPTURE ----
 
+        now = datetime.now().strftime("%m/%d/%Y at %H:%M")
         user_data = {
-            "username": username,
-            "password": password,
-            "account_type": role
+            "Username": username,
+            "Password": password,
+            "Account Type": role,
+            "Keep me logged in status": False,
+            "Account Creation": now,
+            "Account Status": "Active"
         }
 
+        # --- DEBUGGING TRACE ---
+        print("[DEBUG] Inspecting dictionary types before save:")
+        for key, value in user_data.items():
+            print(f"  Key: {key} | Type: {type(value)} | Value: {value}")
+            if isinstance(value, set):
+                print(f"  !!! FOUND OFFENDING SET AT KEY: {key}")
+        # -----------------------
         save_account_data(user_data)
-        print(f" -> Approved Operator AccountL '{username}' saved to database.")
+        print(f" -> Approved Operator Account '{username}' saved to database.")
         print(f" -> Assigned Security Clear Tier: [{role}]")
 
         """Native Dialog commitment trigger: Closes the UI canvas instantly

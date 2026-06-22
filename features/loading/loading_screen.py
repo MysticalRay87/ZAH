@@ -1,6 +1,6 @@
 import os
-import json
-from PyQt6.QtWidgets import QDialog
+import sys
+from PyQt6.QtWidgets import QDialog, QApplication
 from PyQt6.QtCore import QTimer, Qt, QRectF
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QFont, QPainterPath
 
@@ -41,6 +41,7 @@ class ApplicationLoader(QDialog):
         
         self.account_checkpoint_cleared = False
         self.network_checkpoint_cleared = False
+        self.is_boot_paused = False
 
         self.boot_timer = QTimer(self)
         self.boot_timer.timeout.connect(self.advance_loading_cycle)
@@ -70,6 +71,10 @@ class ApplicationLoader(QDialog):
         self.boot_timer.start(30)
 
     def advance_loading_cycle(self):
+        # HARD LOCK: If paused for a modal, exit immediately
+        if self.is_boot_paused:
+            return
+        
         self.current_progress += 1
         
         # 1. VISUAL ANIMATION LOGIC (Persisted)
@@ -79,17 +84,27 @@ class ApplicationLoader(QDialog):
 
         # 2. STATE-GATED PROGRESSION
         # --- LOGIN GATE (30%) ---
-        if self.current_progress == 30:
+        if 30 <= self.current_progress < 31:
+            # Force loading progress to stop
+            self.boot_timer.stop()
+            print(f"[DEBUG] Running Persistence Check...")
+
             if is_session_valid() or check_for_persistent_user():
-                print("[SUCCESS] Session/Persistent user found. Bypassing login.")
+                print("[SUCCESS] Session/Persistence user found. Bypassing login.")
                 self.login_bypassed = True
                 self.current_progress = 59 # Jump to edge of network gate
             else:
                 print("[INFO] No valid session. Triggering Login.")
-                self.boot_timer.stop() # Lock timer during user interaction
+                self.boot_timer.stop()
+                self.is_boot_paused = True # Engage lock
+                
                 self.login_window = LoginWindow()
                 self.login_window.setWindowModality(Qt.WindowModality.ApplicationModal)
-                self.login_window.finished.connect(self.resume_boot_sequence)
+                
+                # --- CORRECTED SIGNAL MAPPING ---
+                self.login_window.accepted.connect(self.resume_boot_sequence)
+                self.login_window.rejected.connect(self.handle_login_rejected) # Use rejection handler
+                
                 self.login_window.show()
                 return # Exit loop until window is closed
             
@@ -121,6 +136,17 @@ class ApplicationLoader(QDialog):
         """Callback to resume the timer after a modal is dismissed."""
         print("[STATUS] Gate cleared. Resuming boot sequence...")
         self.boot_timer.start(30)
+        self.accept()
+
+    def handle_login_rejected(self):
+        print(f"[INFO] Login rejected or canceled. Terminating program.")
+
+        # 1. Close the current loader explicitly
+        self.close()
+
+        # 2. Safely stop all processes and exits program
+        self.boot_timer.stop()
+        QApplication.quit()
 
     def paintEvent(self, event):
         painter = QPainter(self)

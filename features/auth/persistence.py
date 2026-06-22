@@ -9,17 +9,17 @@ def get_data_path():
     """Returns the base data directory path."""
     return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
-def create_user_profile(username, password, account_type):
+def create_user_profile(username, password, role):
     """Creates an enriched user profile object."""
     now = datetime.now().strftime("%m/%d/%Y at %H:%M")
     return {
         "Username": username,
-        "Password": password, # Ensure this is hashed in a production environment
-        "Account Type": account_type,
+        "Password": password,
+        "Account Type": role,
         "Account Creation": now,
-        "Last login": now,
+        "Last Accessed": now,
         "Status": "Active",
-        "persist_session": False # Default state
+        "Keep me logged in status": False # Default state
     }
 
 def save_account_data(user_data):
@@ -65,7 +65,7 @@ def check_for_persistent_user():
         with open(USERS_FILE, 'r') as f:
             users = json.load(f)
         for user in users:
-            if user.get("persist_session") is True:
+            if user.get("Keep me logged in status") is True:
                 return True
     except:
         return False
@@ -83,20 +83,44 @@ def save_session(username):
     print(f"[SUCCESS] Session saved for {username}")
 
 def save_persistence_state(username, persist):
-    file_path = get_data_path()
+    file_path = USERS_FILE
     try:
+        if not os.path.exists(file_path):
+            print(f"[ERROR] Cannot save persistence: {file_path} not found.")
+            return
+        
         with open(file_path, 'r') as f:
             users = json.load(f)
         
         # Update the specific user's record
         for user in users:
-            if user.get("username") == username:
-                user["persist_session"] = persist
+            if user.get("Username") == username:
+                user["Keep me logged in status"] = persist
                 break
         
         # Commit the updated list to the registry
         with open(file_path, 'w') as f:
             json.dump(users, f, indent=4)
+        print(f"[SUCCESS] Persistance updated for {username}: {persist}")
             
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"[ERROR] Persistence registry unreachable: {e}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save persistence: {e}")
+
+def update_last_login(username):
+    """Updates the 'Last Accessed' field for a specific user."""
+    file_path = USERS_FILE
+    try:
+        with open(file_path, 'r') as f:
+            users = json.load(f)
+        
+        now = datetime.now().strftime("%m/%d/%Y - %H:%M")
+        for user in users:
+            if user.get("Username") == username:
+                user["Last Accessed"] = now
+                break
+        
+        with open(file_path, 'w') as f:
+            json.dump(users, f, indent=4)
+        print(f"[SUCCESS] Last Accessed updated for {username}")
+    except Exception as e:
+        print(f"[ERROR] Failed to update login timestamp: {e}")

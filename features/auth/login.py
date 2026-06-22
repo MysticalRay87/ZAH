@@ -84,8 +84,13 @@ class LoginWindow(QDialog):
 
     def initiate_onboarding(self):
         print("[STATUS] Onboarding trigger detected. Handoff to wizard phase...")
-        self.onboarding_requested = True
-        self.accept() # Close login screen
+        try:
+            from features.auth.onboarding import AccountOnboardingWizard
+            self.wizard = AccountOnboardingWizard(self)
+            self.wizard.exec()
+        except Exception as e:
+            print(f"[ERROR] Failed to launch onboarding: {e}")
+            
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -129,13 +134,20 @@ class LoginWindow(QDialog):
         # 5. Authenticate
         auth_success = False
         for user in users:
-            if user.get("username") == entered_id and user.get("password") == entered_key:
+            # Fixed: Matching capitalized keys from persistence.py
+            if user.get("Username") == entered_id and user.get("Password") == entered_key:
                 auth_success = True
                 break
         
         # 6. Execute handoff or error
         if auth_success:
             print("[AUTH] Credentials verified successfully.")
+            
+            # --- PATCH: Update Persistence & Timestamp ---
+            from features.auth.persistence import save_persistence_state, update_last_login
+            save_persistence_state(entered_id, self.remember_me_check.isChecked())
+            update_last_login(entered_id)
+            
             self.login_successful.emit() # Signal orchestrator
             self.accept()
         else:
