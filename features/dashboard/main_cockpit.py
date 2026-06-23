@@ -104,10 +104,8 @@ class MainCockpit(QMainWindow):
 
         # 3. Request quit and WAIT for actual termination
         self.telemetry_worker.quit()
-        if self.telemetry_worker.wait(1): # Wait up to 2 seconds
-            print("[SUCCESS] Telemetry worker terminated gracefully.")
-        else:
-            print("[WARNING] Telemetry worker forced termination.")
+        self.telemetry_worker.wait(1) # Wait for less than 1 second before force-closing.
+        print("[WARNING] Telemetry worker forced termination.")
         
         event.accept()
         print("[SUCCESS] Cockpit closed successfully.")
