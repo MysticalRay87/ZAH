@@ -1,3 +1,4 @@
+import json
 from PyQt6.QtWidgets import QMainWindow, QWidget, QGridLayout, QFrame, QLabel, QVBoxLayout, QTextEdit
 from PyQt6.QtCore import Qt
 
@@ -24,31 +25,17 @@ class MainCockpit(QMainWindow):
         self.grid.setContentsMargins( 10, 10, 10, 10)
         self.grid.setSpacing(10)
 
-        # --------------------------------------------------
-        # Zone Definition
-        # --------------------------------------------------
+        # Grid Initialization        
+        self.setup_zones()
 
-        # Zone A: Telemetry Panel (Top Left)
-        self.telemetry_panel = TelemetryPanel("SYSTEM LOAD")
-        self.telemetry_panel.setObjectName("TelemetryPanel")
-        self.grid.addWidget(self.telemetry_panel, 0, 0, 1, 1)
-
-        # Zone B: Console Output (Full Bottom Span)
-        self.console_frame = QFrame()
-        self.console_frame.setObjectName("ConsoleFrame")
-        self.console_layout = QVBoxLayout(self.console_frame)
-        
         # Console output widget
         self.console = QTextEdit()
         self.console.setObjectName("ConsoleDisplay")
         self.console.setReadOnly(True)
         self.console_layout.addWidget(self.console)
-        
-        # Span across 3 columns at Row 2
-        self.grid.addWidget(self.console_frame, 2, 0, 1, 3)
-        
+
         # --- Telemetry Engine Initialization ---
-        self.telemetry_worker = TelemetryWorker("127.0.0.1", 30004)
+        self.telemetry_worker = TelemetryWorker()
         self.telemetry_worker.log_received.connect(self.update_console_output)
         self.telemetry_worker.start()
         
@@ -56,32 +43,74 @@ class MainCockpit(QMainWindow):
         print("[SUCCESS] Main Cockpit Dashboard initialized.")
 
     def setup_zones(self):
-        # Create a frame for the console (Zone B)
+        
+        # -----------------------------------------------------
+        # Zone A (Header/Status): Row 0, Col 0 (Spans 3). Holds your User, Status, CPU, and RAM metrics.
+        # -----------------------------------------------------
+        self.telemetry_panel = TelemetryPanel("SYSTEM LOAD")
+        self.telemetry_panel.setObjectName("TelemetryPanel")
+        self.grid.addWidget(self.telemetry_panel, 0, 0, 1, 1)
+
+        # -----------------------------------------------------
+        # Zone B (Telemetry/IP): Row 1, Col 0. IP + Telemetry/Data Feeds.
+        # -----------------------------------------------------
         self.console_frame = QFrame()
         self.console_frame.setObjectName("ConsoleFrame")
+        
+        # Assign to self so it is available to the entire class instance
         self.console_layout = QVBoxLayout(self.console_frame)
         
-        # Integrated Console Output
         self.console = QTextEdit()
+        self.console.setObjectName("ConsoleDisplay")
         self.console.setReadOnly(True)
         self.console_layout.addWidget(self.console)
         
-        self.grid.addWidget(self.console_frame, 2, 0, 1, 3) # Row 2, Col 0, 1 row height, 3 cols wide
-        
-        # New Telemetry Panel
-        self.telemetry_panel = TelemetryPanel("SYSTEM LOAD")
-        self.grid.addWidget(self.telemetry_panel, 0, 0, 1, 1) # Positioned top-left
+        # Add to grid
+        self.grid.addWidget(self.console_frame, 2, 0, 1, 3)
+
+        # -----------------------------------------------------
+        # Zone C (Player Registry): Row 1, Col 1. The player list table.
+        # -----------------------------------------------------
+
+        # -----------------------------------------------------
+        # Zone D (Functional Panel): Row 1, Col 2. Control buttons.
+        # -----------------------------------------------------
+
+        # -----------------------------------------------------
+        # Zone E (Command Console): Row 2, Col 0 (Spans 3). Your terminal input.
+        # -----------------------------------------------------
 
         print("[SUCCESS] Main Cockpit grid initialized.")
+        pass
 
     def update_console_output(self, log_line):
         """Slot to receive signal from worker and update UI."""
         self.console.append(log_line)
 
     def closeEvent(self, event):
-        """Ensure thread stops when window closes."""
-        self.telemetry_worker.stop()
+        """Standardized, safe shutdown sequence."""
+        print("[STATUS] Shutdown signal received. Closing telemetry worker...")
+        
+        # 1. Flag the worker to terminate
+        self.telemetry_worker.isRunning = False
+        
+        # 2. Force socket shutdown to break the blocking recv()
+        if hasattr(self.telemetry_worker, 'socket') and self.telemetry_worker.socket:
+            try:
+                self.telemetry_worker.socket.shutdown(socket.SHUT_RDWR)
+                self.telemetry_worker.socket.close()
+            except Exception as e:
+                print(f"[DEBUG] Socket already closed: {e}")
+
+        # 3. Request quit and WAIT for actual termination
+        self.telemetry_worker.quit()
+        if self.telemetry_worker.wait(1): # Wait up to 2 seconds
+            print("[SUCCESS] Telemetry worker terminated gracefully.")
+        else:
+            print("[WARNING] Telemetry worker forced termination.")
+        
         event.accept()
+        print("[SUCCESS] Cockpit closed successfully.")
 
 
 class TelemetryPanel(QFrame):
